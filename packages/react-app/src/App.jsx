@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Link, Route, Switch } from "react-router-dom";
 import Web3Modal from "web3modal";
 import "./App.css";
-import { Account, Address, Balance, Contract, Faucet, GasGauge, Header, Ramp, ThemeSwitch } from "./components";
+import { Account, Address, Balance, Contract, Faucet, GasGauge, Header, Ramp, ThemeSwitch, EtherInput } from "./components";
 import { INFURA_ID, NETWORK, NETWORKS } from "./constants";
 import { Transactor } from "./helpers";
 import {
@@ -50,7 +50,7 @@ const { ethers } = require("ethers");
 */
 
 /// 📡 What chain are your contracts deployed to?
-const targetNetwork = NETWORKS.localhost; // <------- select your target frontend network (localhost, rinkeby, xdai, mainnet)
+const targetNetwork = NETWORKS.rinkeby; //.localhost; <------- select your target frontend network (localhost, rinkeby, xdai, mainnet)
 
 // 😬 Sorry for all the console logging
 const DEBUG = true;
@@ -173,6 +173,7 @@ function App(props) {
 
   const [injectedProvider, setInjectedProvider] = useState();
   const [address, setAddress] = useState();
+  const [amount, setAmount] = useState(1);
 
   const logoutOfWeb3Modal = async () => {
     await web3Modal.clearCachedProvider();
@@ -255,6 +256,14 @@ function App(props) {
   // ** keep track of total 'threshold' needed of ETH
   const threshold = useContractReader(readContracts, "Staker", "threshold");
   console.log("💵 threshold:", threshold);
+
+  // ** keep track if withdrawal is open
+  const openForWithdraw = useContractReader(readContracts, "Staker", "openForWithdraw");
+  console.log("💵 openForWithdraw:", openForWithdraw);
+
+  // ** keep track if executed
+  const executed = useContractReader(readContracts, "Staker", "executed");
+  console.log("💵 executed:", executed);
 
   // ** keep track of a variable from the contract in the local React state:
   const balanceStaked = useContractReader(readContracts, "Staker", "balances", [address]);
@@ -510,81 +519,129 @@ function App(props) {
         <Switch>
           <Route exact path="/">
             {completeDisplay}
+            <div style={{ width: 640, margin: "auto", marginTop: 32, paddingBottom: 32 }}>
+              <div style={{ padding: 8, marginTop: 32 }}>
+                <div>Staker Contract:</div>
+                <Address value={readContracts && readContracts.Staker && readContracts.Staker.address} />
+              </div>
 
-            <div style={{ padding: 8, marginTop: 32 }}>
-              <div>Staker Contract:</div>
-              <Address value={readContracts && readContracts.Staker && readContracts.Staker.address} />
+              <div style={{ padding: 8, marginTop: 32 }}>
+                <div>Timeleft:</div>
+                {timeLeft && humanizeDuration(timeLeft.toNumber() * 1000)}
+                <Button
+                  type={"default"}
+                  style={{ paddingLeft: 3, border: 0}}
+                  onClick={() => {
+                    tx({
+                      to: address,
+                      value: 0
+                    });
+                  }}
+                >
+                  🔄
+                </Button>
+              </div>
+
+              <div style={{ padding: 8 }}>
+                <div>Total staked:</div>
+                <Balance balance={stakerContractBalance} fontSize={64} />/<Balance balance={threshold} fontSize={64} />
+              </div>
+
+              <div style={{ padding: 8 }}>
+                <div>You staked:</div>
+                <Balance balance={balanceStaked} fontSize={64} />
+              </div>
+
+              <div style={{ padding: 8, maxWidth: 300, margin: "auto", flexDirection: "row", display: "flex"}}>
+                <EtherInput
+                  price={props.price}
+                  value={amount}
+                  defaultValue={amount}
+                  onChange={value => {
+                    setAmount(value);
+                  }}
+                />
+                <Button
+                  type={balanceStaked ? "success" : "primary"}
+                  disabled={executed || timeLeft == 0}
+                  onClick={() => {
+                    let value;
+
+                    try {
+                      value = ethers.utils.parseEther("" + amount);
+                    } catch (e) {
+                      // failed to parseEther, try something else
+                      value = ethers.utils.parseEther("" + parseFloat(amount).toFixed(8));
+                    }
+
+                    tx(writeContracts.Staker.stake({
+                      value: value
+                    }));
+                  }}
+                  >
+                  🥩 Stake
+                </Button>
+
+              </div>
+
+              <div style={{ padding: 8 }}>
+                <Button
+                  type={balanceStaked ? "success" : "primary"}
+                  disabled={executed || timeLeft == 0}
+                  onClick={() => {
+                    tx(writeContracts.Staker.stake({ value: ethers.utils.parseEther("0.5") }));
+                  }}
+                  >
+                  🥩 Stake 0.5 ether!
+                </Button>
+              </div>
+
+              <div style={{ padding: 8 }}>
+                <Button
+                  type={"default"}
+                  disabled={executed || (timeLeft > 0 && stakerContractBalance - threshold < 0)}
+                  onClick={() => {
+                    tx(writeContracts.Staker.execute());
+                  }}
+                >
+                  📡 Execute!
+                </Button>
+              </div>
+
+              <div style={{ padding: 8 }}>
+                <Button
+                  type={"default"}
+                  disabled={!openForWithdraw || balanceStaked == 0}
+                  onClick={() => {
+                    tx(writeContracts.Staker.withdraw(address));
+                  }}
+                >
+                  🏧 Withdraw
+                </Button>
+              </div>
+
+              {/*
+                  🎛 this scaffolding is full of commonly used components
+                  this <Contract/> component will automatically parse your ABI
+                  and give you a form to interact with it locally
+              */}
+
+              <div style={{ width: 500, margin: "auto", marginTop: 64 }}>
+                <div>Stake Events:</div>
+                <List
+                  dataSource={stakeEvents}
+                  renderItem={item => {
+                    return (
+                      <List.Item key={item.blockNumber}>
+                        <Address value={item.args[0]} ensProvider={mainnetProvider} fontSize={16} /> =>
+                        <Balance balance={item.args[1]} />
+                      </List.Item>
+                    );
+                  }}
+                />
+              </div>
+
             </div>
-
-            <div style={{ padding: 8, marginTop: 32 }}>
-              <div>Timeleft:</div>
-              {timeLeft && humanizeDuration(timeLeft.toNumber() * 1000)}
-            </div>
-
-            <div style={{ padding: 8 }}>
-              <div>Total staked:</div>
-              <Balance balance={stakerContractBalance} fontSize={64} />/<Balance balance={threshold} fontSize={64} />
-            </div>
-
-            <div style={{ padding: 8 }}>
-              <div>You staked:</div>
-              <Balance balance={balanceStaked} fontSize={64} />
-            </div>
-
-            <div style={{ padding: 8 }}>
-              <Button
-                type={"default"}
-                onClick={() => {
-                  tx(writeContracts.Staker.execute());
-                }}
-              >
-                📡 Execute!
-              </Button>
-            </div>
-
-            <div style={{ padding: 8 }}>
-              <Button
-                type={"default"}
-                onClick={() => {
-                  tx(writeContracts.Staker.withdraw(address));
-                }}
-              >
-                🏧 Withdraw
-              </Button>
-            </div>
-
-            <div style={{ padding: 8 }}>
-              <Button
-                type={balanceStaked ? "success" : "primary"}
-                onClick={() => {
-                  tx(writeContracts.Staker.stake({ value: ethers.utils.parseEther("0.5") }));
-                }}
-              >
-                🥩 Stake 0.5 ether!
-              </Button>
-            </div>
-
-            {/*
-                🎛 this scaffolding is full of commonly used components
-                this <Contract/> component will automatically parse your ABI
-                and give you a form to interact with it locally
-            */}
-
-            <div style={{ width: 500, margin: "auto", marginTop: 64 }}>
-              <div>Stake Events:</div>
-              <List
-                dataSource={stakeEvents}
-                renderItem={item => {
-                  return (
-                    <List.Item key={item.blockNumber}>
-                      <Address value={item.args[0]} ensProvider={mainnetProvider} fontSize={16} /> =>
-                      <Balance balance={item.args[1]} />
-                    </List.Item>
-                  );
-                }}
-              />
-            </div>
-
             {/* uncomment for a second contract:
             <Contract
               name="SecondContract"

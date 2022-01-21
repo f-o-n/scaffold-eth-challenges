@@ -60,7 +60,7 @@ const { ethers } = require("ethers");
 */
 
 /// 📡 What chain are your contracts deployed to?
-const targetNetwork = NETWORKS.localhost; // <------- select your target frontend network (localhost, rinkeby, xdai, mainnet)
+const targetNetwork = NETWORKS.rinkeby;//.localhost; // <------- select your target frontend network (localhost, rinkeby, xdai, mainnet)
 
 // 😬 Sorry for all the console logging
 const DEBUG = true;
@@ -486,6 +486,9 @@ function App(props) {
   const buyTokensEvents = useEventListener(readContracts, "Vendor", "BuyTokens", localProvider, 1);
   console.log("📟 buyTokensEvents:", buyTokensEvents);
 
+  const sellTokensEvents = useEventListener(readContracts, "Vendor", "SellTokens", localProvider, 1);
+  console.log("📟 sellTokensEvents:", sellTokensEvents);
+
   const [tokenBuyAmount, setTokenBuyAmount] = useState();
   const [tokenSellAmount, setTokenSellAmount] = useState();
   const [isSellAmountApproved, setIsSellAmountApproved] = useState();
@@ -626,8 +629,6 @@ function App(props) {
             </div>
 
             {/*Extra UI for buying the tokens back from the user using "approve" and "sellTokens"*/}
-            
-            {/*
 
             <Divider />
             <div style={{ padding: 8, marginTop: 32, width: 300, margin: "auto" }}>
@@ -698,7 +699,7 @@ function App(props) {
               </Card>
             </div>
 
-            */}
+
 
             <div style={{ padding: 8, marginTop: 32 }}>
               <div>Vendor Token Balance:</div>
@@ -717,11 +718,27 @@ function App(props) {
                 renderItem={item => {
                   return (
                     <List.Item key={item.blockNumber + item.blockHash}>
-                      <Address value={item.args[0]} ensProvider={mainnetProvider} fontSize={16} /> paid
-                      <Balance balance={item.args[1]} />
-                      ETH to get
+                      <Address value={item.args[0]} ensProvider={mainnetProvider} fontSize={16} /> bought
                       <Balance balance={item.args[2]} />
-                      Tokens
+                      GLD for
+                      <Balance balance={item.args[1]} />
+                      ETH
+
+                    </List.Item>
+                  );
+                }}
+              />
+              <div>Sell Token Events:</div>
+              <List
+                dataSource={sellTokensEvents}
+                renderItem={item => {
+                  return (
+                    <List.Item key={item.blockNumber + item.blockHash}>
+                      <Address value={item.args[0]} ensProvider={mainnetProvider} fontSize={16} /> sold
+                      <Balance balance={item.args[1]} />
+                      GLD for
+                      <Balance balance={item.args[2]} />
+                      ETH
                     </List.Item>
                   );
                 }}
